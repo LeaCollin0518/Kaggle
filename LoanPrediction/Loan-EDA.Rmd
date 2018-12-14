@@ -12,7 +12,7 @@ The goal of this problem is to predict if a new loan applicant will get their lo
 
 ```{r}
 library(tidyverse)
-setwd("~/DataScienceProjects/LoanPrediction/Data")
+setwd("~/DataScienceProjects/Kaggle/Kaggle/LoanPrediction/Data")
 train <- read_csv("trainData.csv", col_names = TRUE)
 head(train)
 ```
@@ -285,6 +285,7 @@ table(train$Married)
 train <- train %>%
     mutate(Married = if_else(is.na(Married), "Yes", Married))
 train$Married <- as.factor(train$Married)
+sum(is.na(train$Married))
 ```
 
 Now we look at if there is any relation between credit history and some of the other variables in our dataset. Applicant income, this time, definitely seems like it might be relevant. 
@@ -371,5 +372,14 @@ train$Credit_History <- as.character(train$Credit_History)
 train$Education <- as.character(train$Education)
 train <- train %>%
     mutate(Credit_History2 = if_else(is.na(Credit_History) & train$Education == "Graduate", "1", Credit_History))
+train <- train %>%
+  mutate(Credit_History3 = if_else(is.na(Credit_History2) & train$Education == "Not Graduate", "0", Credit_History2))
 sum(is.na(train$Credit_History2))
+sum(is.na(train$Credit_History3))
+```
+
+Now that we've taken care of the missing values of the variables we care about, we can write this to a new datafile and go on to making the machine learning models in Python.
+
+```{r}
+write.csv(train, file = "preProcessedTrain.csv")
 ```
