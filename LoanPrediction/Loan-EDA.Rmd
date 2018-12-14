@@ -1,0 +1,375 @@
+---
+title: "LoanPrediction - Exploratory Data Analysis"
+author: "Lea Collin"
+output: pdf_document
+---
+
+In this file, I hope to perform some preliminary exploratory data analysis on the Loan Prediction dataset provided by Analytics Vidhya in their **Loan Prediction Practice Problem**. The problem statement can be found [here](https://datahack.analyticsvidhya.com/contest/practice-problem-loan-prediction-iii/).
+
+The goal of this problem is to predict if a new loan applicant will get their loan approved based on a variety of variables provided in the datset. We start by loading and taking a look at what is in this data.
+
+## Analysis of Data Quality
+
+```{r}
+library(tidyverse)
+setwd("~/DataScienceProjects/LoanPrediction/Data")
+train <- read_csv("trainData.csv", col_names = TRUE)
+head(train)
+```
+
+We see here are that there are some discrete variables such as married, gender, etc. as well as some continuous variables such as applicant income, coapplicant income, etc. My guess, without taking a look at the data yet, is that applicant income and loan amount are going to be some of the most important variables in determining whether or not a loan gets approved. Before we dive into that though, let's make discrete variables into factors and let's take a look at the quality of this dataset (ie. the number of missing values). 
+
+```{r}
+train$Gender <- as.factor(train$Gender)
+train$Married <- as.factor(train$Married)
+train$Education <- as.factor(train$Education)
+train$Self_Employed <- as.factor(train$Self_Employed)
+train$Property_Area <- as.factor(train$Property_Area)
+train$Loan_Status <- as.factor(train$Loan_Status)
+train$Credit_History <- as.factor(train$Credit_History)
+```
+
+```{r}
+colSums(is.na(train)/nrow(train)) %>%
+  sort(decreasing = TRUE)
+```
+
+```{r}
+library(extracat)
+visna(train, sort = 'b')
+```
+
+From this graph, we see that the majority of entries have no missing data for any of the columns. The next most common pattern is credit history, so perhaps it will be wise to not include this variable or replace the NA's with something to be able to use it. The other missing patterns seem quite infrequent. 
+
+## Categorical Variables
+
+Now that we've quickly looked at what data values are missing, we can start doing some exploratory analysis. We will start with the discrete variables (gender, married, education, self-employed, property area).
+
+```{r}
+train_temp <- train[(which(!is.na(train$Married))),]
+included_vars <- c("Married", "Loan_Status")
+train_temp <- train_temp %>% select(included_vars)
+ggplot(train_temp, aes(x = Loan_Status, fill = Married)) + 
+    geom_bar(position = "dodge")
+```
+
+```{r}
+library(vcd)
+library(grid) 
+mosaic(Loan_Status ~ Married, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+```{r}
+train_temp2 <- train_temp %>% group_by(Married, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Married + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+```{r}
+mosaic(Xtest$expected, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+The mosaic plot of the data compared to the mosaic plot of the expected values under the null hypothesis are not so wildly different. However, the p-value from the chi-squared test is between 0.01 and 0.05 so there is some evidence that marital status and loan status are related. Onto gender...
+
+```{r}
+train_temp <- train[(which(!is.na(train$Gender))),]
+included_vars <- c("Gender", "Loan_Status")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Loan_Status ~ Gender, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+```{r}
+train_temp2<- train_temp %>% group_by(Gender, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Gender + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+```{r}
+mosaic(Xtest$expected, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+As seen both by the similarity in the mosaic plots and the very high p-value from the chi-square test, there does not seem to be much of an association between gender and whether a person's loan is approved, so we likely do not have to include this variable in our predictive model. Onto education...
+
+```{r}
+included_vars <- c("Education", "Loan_Status")
+train_temp <- train %>% select(included_vars)
+mosaic(Loan_Status ~ Education, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+```{r}
+train_temp2<- train_temp %>% group_by(Education, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Education + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+```{r}
+mosaic(Xtest$expected, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+From this mosaic plot and the relatively low p-value from the chi-square test, it does seem like there is some dependence relationship between education and loan status. Onto credit history...
+
+```{r}
+train_temp <- train[(which(!is.na(train$Credit_History))),]
+included_vars <- c("Credit_History", "Loan_Status")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Loan_Status ~ Credit_History, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+Wow...it's obvious that people with a "1" credit history are significantly more likely to get their loan approved. People with a "0" credit history are almost sure to not get their loan approved. Let's compare this with the "expected" values mosaic plot just to really drive the point home. Also, the p-value for the chi-square test should be extremely small. 
+
+```{r}
+train_temp2<- train_temp %>% group_by(Credit_History, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Credit_History + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+```{r}
+mosaic(Xtest$expected, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+Onto self-employed...
+
+```{r}
+train_temp <- train[(which(!is.na(train$Self_Employed))),]
+included_vars <- c("Self_Employed", "Loan_Status")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Loan_Status ~ Self_Employed, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+This mosaic plot seems to suggest that there is no dependence between whether a person is self-employed and their loan status. We will check with a chi-square test quickly to reaffirm this. 
+
+```{r}
+train_temp2<- train_temp %>% group_by(Self_Employed, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Self_Employed + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+As guessed from the mosaic plot, this p-value is extremely high so we can safely conclude that there is no dependence relationship between self-employed and loan status. Finally, we look at property area.
+
+```{r}
+included_vars <- c("Property_Area", "Loan_Status")
+train_temp <- train %>% select(included_vars)
+mosaic(Loan_Status ~ Property_Area, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+From this plot, it seems that people who live in semi-urban areas are more likely to get their loans approved. We once again confirm the relationship and look at the "expected" values mosaic plot.
+
+```{r}
+train_temp2<- train_temp %>% group_by(Property_Area, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Property_Area + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+```{r}
+mosaic(Xtest$expected, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+Now that we have looked at all the obvious categorical variable, we can look into whether number of dependents should be considered categorical. We see that the possible number of dependents in the dataset is: 0, 1, 2, 3+. Let's see if it's reasonable for there to be a "3+" bin. We assess this with the following bar chart.
+
+```{r}
+train_temp <- train[(which(!is.na(train$Dependents))),]
+included_vars <- c("Dependents", "Loan_Status")
+train_temp <- train_temp %>% select(included_vars)
+train_temp2 <- train_temp %>% group_by(Dependents) %>% 
+    summarize(Freq = n())
+ggplot(train_temp2, aes(Dependents, Freq)) +
+geom_bar(stat = 'identity', color="#3333FF", fill="#CCCCFF", width = 0.95)
+```
+
+There is not an overwhelming number of people that fall into the "3+" category so it seems reasonable to group people together in this way. Because there are only 4 levels, we can consider number of dependents as a discrete variable and do the same analysis as we did for the other variables. 
+
+```{r}
+train_temp$Dependents <- as.factor(train_temp$Dependents)
+mosaic(Loan_Status ~ Dependents, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+```{r}
+train_temp2 <- train_temp %>% group_by(Dependents, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Dependents + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+This p-value is high enough to not be able to reject the null hypothesis so we have reason to believe that there is not much of dependence relationship between number of dependents and loan status.
+
+At this point, we have looked only at the categorical variables and concluded that the following have a dependence relationship with loan status: Married, Credit History, Education, and Property Area. Now it's time to take a look at the continuous variables. We will first look at Applicant Income since this logically seems like it is relevant to whether a loan is approved.
+
+```{r}
+ggplot(train, aes(x=ApplicantIncome)) + 
+  geom_histogram(color = 'blue', fill='#99CCFF', bins = 50) +
+  facet_grid(Loan_Status ~ .) 
+```
+
+Interestingly enough, it seems as though the distributions of applicant income are very similar between people who got their loans approved and those who didn't. The only difference is that there are more datapoints in the group of people who got approved. This when against what I previously thought and now I'm rethinking my decision to include applicant income in the models. We can also take a look at coapplicant income, which is usually listed as 0.
+
+```{r}
+ggplot(train, aes(x=CoapplicantIncome)) + 
+  geom_histogram(color = 'blue', fill='#99CCFF', bins = 50) +
+  facet_grid(Loan_Status ~ .)
+```
+
+It doesn't seem that there is much difference between coapplicant incomes between loans that were and were not approved. This is not too surprising as there was not much difference between applicant incomes and it seems intuitive that the coapplicant's income would not have more influence. 
+
+Let's look at loan amount next. 
+
+```{r}
+train_temp <- train[which(!is.na(train$LoanAmount)),]
+ggplot(train_temp, aes(x=LoanAmount)) + 
+  geom_histogram(color = 'blue', fill='#99CCFF', bins = 40) +
+  facet_grid(Loan_Status ~ .) 
+```
+
+Similar to the applicant income plot, this plot isn't too revealing. 
+
+The final variable to consider is loan amount term. Though this is an integer value (to represent number of months), there don't seem to be too many different values and therefore we should perhaps consider this variable to be a discrete one. Let's quickly make a bar chart to see how many different values we're working with. 
+
+```{r}
+train$Loan_Amount_Term <- as.factor(train$Loan_Amount_Term)
+train_temp <- train[(which(!is.na(train$Loan_Amount_Term))),]
+included_vars <- c("Loan_Amount_Term", "Loan_Status")
+train_temp <- train_temp %>% select(included_vars)
+train_temp2 <- train_temp %>% group_by(Loan_Amount_Term) %>% 
+    summarize(Freq = n())
+ggplot(train_temp2, aes(Loan_Amount_Term, Freq)) +
+geom_bar(stat = 'identity', color="#3333FF", fill="#CCCCFF", width = 0.95)
+```
+
+We are working with 10 different loan terms, however the most common is 360 months. My guess is that since most loans are for the same term amount, this variable does not influence whether or not a loan is approved and other variables are likely much more important.
+
+```{r}
+train_temp2<- train_temp %>% group_by(Loan_Amount_Term, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Loan_Amount_Term + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+Because there are so many levels to this factor, the chi-square test may be unreliable. Instead, we will group together all term amounts that are not 360 and perform a chi-square test on this new variable.
+
+```{r}
+train_temp$Loan_Amount_Term2 <- ifelse(train_temp$Loan_Amount_Term == 360, "360 ", "Not 360")
+train_temp2<- train_temp %>% group_by(Loan_Amount_Term2, Loan_Status) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Loan_Amount_Term2 + Loan_Status, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+From this chi-square test, it seems that loan term amount is not important. 
+In conclusion, it seems as though the following variables are important: Married, Credit History, Education, and Property Area. We saw earlier that education and property area are not missing any values, however married and credit history are. To be exact there are:
+
+```{r}
+sum(is.na(train$Married))
+sum(is.na(train$Credit_History))
+```
+
+Because only 3 people in the data are missing their marriage information, we can just replace these values with what is most common in the dataset. Credit history, however, has 50 values missing and also seems to be one of the most, if not the most, important factor in determining whether or not a loan is approved. So special care should be taken to replace this missing value. 
+
+```{r}
+# there are almost twice as many married people in the dataset as unmarried so let's replace missing values with yes
+train$Married <- as.character(train$Married)
+table(train$Married)
+train <- train %>%
+    mutate(Married = if_else(is.na(Married), "Yes", Married))
+train$Married <- as.factor(train$Married)
+```
+
+Now we look at if there is any relation between credit history and some of the other variables in our dataset. Applicant income, this time, definitely seems like it might be relevant. 
+
+```{r}
+train_temp <- train[which(!is.na(train$Credit_History)),]
+ggplot(train_temp, aes(x=ApplicantIncome)) + 
+  geom_histogram(color = 'blue', fill='#99CCFF', bins = 55) +
+  facet_grid(Credit_History ~ .) 
+```
+
+It seems from this that anyone with an income greater than 10,000, has a 1 for their credit history. Let's see if this decreases the number of people with NA as their credit history. 
+
+```{r}
+train$Credit_History <- as.character(train$Credit_History)
+train <- train %>%
+    mutate(Credit_History2 = if_else(is.na(Credit_History) & ApplicantIncome > 10000, "1", Credit_History))
+sum(is.na(train$Credit_History2))
+```
+
+Okay so that only helped us fill in 3 values...let's undo that.
+
+```{r}
+train$Credit_History2 <- NULL
+train$Credit_History <- as.factor(train$Credit_History)
+```
+
+```{r}
+train_temp <- train[(which(!is.na(train$Credit_History))),]
+included_vars <- c("Married", "Credit_History")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Credit_History ~ Married, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+From this mosaic plot, it seems as though there is no relation between credit history and marital status. Let's look if there's any relation between credit history and gender.
+
+```{r}
+train_temp <- train[(which(!is.na(train$Credit_History) & !is.na(train$Gender))),]
+included_vars <- c("Gender", "Credit_History")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Credit_History ~ Gender, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+```{r}
+train_temp2<- train_temp %>% group_by(Gender, Credit_History) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Gender + Credit_History, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+Again...no relation. Let's try self-employed.
+
+```{r}
+train_temp <- train[(which(!is.na(train$Credit_History) & !is.na(train$Self_Employed))),]
+included_vars <- c("Self_Employed", "Credit_History")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Credit_History ~ Self_Employed, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+Yet again, no relation. Let's look at education.
+
+```{r}
+train_temp <- train[(which(!is.na(train$Credit_History) & !is.na(train$Education))),]
+included_vars <- c("Education", "Credit_History")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Credit_History ~ Education, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+Finally, maybe some relation. Let's do a chi-square test to be sure. 
+
+```{r}
+train_temp2<- train_temp %>% group_by(Education, Credit_History) %>% 
+    summarize(Freq = n())
+newct <- xtabs(Freq ~ Education + Credit_History, train_temp2)
+Xtest <- chisq.test(newct, correct = FALSE)
+Xtest
+```
+
+A borderline p-value but we're starting to have nothing to predict credit history so let's say that education is relevant. 
+
+```{r}
+train$Credit_History <- as.character(train$Credit_History)
+train$Education <- as.character(train$Education)
+train <- train %>%
+    mutate(Credit_History2 = if_else(is.na(Credit_History) & train$Education == "Graduate", "1", Credit_History))
+sum(is.na(train$Credit_History2))
+```
