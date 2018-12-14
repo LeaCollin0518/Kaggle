@@ -383,3 +383,27 @@ Now that we've taken care of the missing values of the variables we care about, 
 ```{r}
 write.csv(train, file = "preProcessedTrain.csv")
 ```
+
+Finally, we just need to "preprocess" the test data in the same way.
+
+```{r}
+test <- read_csv("Data/testData.csv", col_names = TRUE)
+colSums(is.na(test)) %>%
+  sort(decreasing = TRUE)
+```
+
+We see that only the credit history is missing from the variables we care about. 
+
+```{r}
+test$Credit_History <- as.character(test$Credit_History)
+test$Education <- as.character(test$Education)
+test <- test %>%
+    mutate(Credit_History2 = if_else(is.na(Credit_History) & test$Education == "Graduate", "1", Credit_History))
+test <- test %>%
+  mutate(Credit_History3 = if_else(is.na(Credit_History2) & test$Education == "Not Graduate", "0", Credit_History2))
+sum(is.na(test$Credit_History3))
+```
+
+```{r}
+write.csv(test, file = "preProcessedTest.csv")
+```
