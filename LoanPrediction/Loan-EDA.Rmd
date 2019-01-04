@@ -17,7 +17,7 @@ train <- read_csv("trainData.csv", col_names = TRUE)
 head(train)
 ```
 
-We see here are that there are some discrete variables such as married, gender, etc. as well as some continuous variables such as applicant income, coapplicant income, etc. My guess, without taking a look at the data yet, is that applicant income and loan amount are going to be some of the most important variables in determining whether or not a loan gets approved. Before we dive into that though, let's make discrete variables into factors and let's take a look at the quality of this dataset (ie. the number of missing values). 
+We see here are that there are some discrete variables such as married, gender, etc. as well as some continuous variables such as applicant income, coapplicant income, etc. My guess, without taking a look at the data yet, is that applicant income and loan amount are going to be some of the most important variables in determining whether or not a loan gets approved. Before we dive into that though, let's make discrete variables into factors and let's take a look at the quality of this dataset (ie. the number of missing values).
 
 ```{r}
 train$Gender <- as.factor(train$Gender)
@@ -33,13 +33,17 @@ train$Credit_History <- as.factor(train$Credit_History)
 colSums(is.na(train)/nrow(train)) %>%
   sort(decreasing = TRUE)
 ```
+```{r}
+colSums(is.na(train)) %>%
+  sort(decreasing = TRUE)
+```
 
 ```{r}
 library(extracat)
 visna(train, sort = 'b')
 ```
 
-From this graph, we see that the majority of entries have no missing data for any of the columns. The next most common pattern is credit history, so perhaps it will be wise to not include this variable or replace the NA's with something to be able to use it. The other missing patterns seem quite infrequent. 
+From this graph, we see that the majority of entries have no missing data for any of the columns. The next most common pattern is credit history, so perhaps it will be wise to not include this variable or replace the NA's with something to be able to use it. The other missing patterns seem quite infrequent.
 
 ## Categorical Variables
 
@@ -203,7 +207,9 @@ Xtest <- chisq.test(newct, correct = FALSE)
 Xtest
 ```
 
-This p-value is high enough to not be able to reject the null hypothesis so we have reason to believe that there is not much of dependence relationship between number of dependents and loan status.
+This p-value is high enough to not be able to reject the null hypothesis so we have reason to believe that there is not much of a dependence relationship between number of dependents and loan status.
+
+## Continuous Variables
 
 At this point, we have looked only at the categorical variables and concluded that the following have a dependence relationship with loan status: Married, Credit History, Education, and Property Area. Now it's time to take a look at the continuous variables. We will first look at Applicant Income since this logically seems like it is relevant to whether a loan is approved.
 
@@ -221,7 +227,21 @@ ggplot(train, aes(x=CoapplicantIncome)) +
   facet_grid(Loan_Status ~ .)
 ```
 
-It doesn't seem that there is much difference between coapplicant incomes between loans that were and were not approved. This is not too surprising as there was not much difference between applicant incomes and it seems intuitive that the coapplicant's income would not have more influence. 
+It doesn't seem that there is much difference between coapplicant incomes between loans that were and were not approved. This is not too surprising as there was not much difference between applicant incomes and it seems intuitive that the coapplicant's income would not have more influence. It might be smart to consider combining applicant and coapplicant incomes to see the effect of total income on loan approval. Maybe this way, we will see that income has an effect on loan approval.
+
+```{r}
+train$TotalIncome <- train$ApplicantIncome + train$CoapplicantIncome
+ggplot(train, aes(x=TotalIncome)) + 
+  geom_histogram(color = 'blue', fill='#99CCFF', bins = 50) +
+  facet_grid(Loan_Status ~ .)
+```
+
+We defintely see some "Yes" loan status' in the higher total income ranges now. It might be easier to visualize this by first binning the incomes and then doing a mosaic plot. 
+
+```{r}
+# TO-DO: bin total income and plot as mosaic plot
+
+```
 
 Let's look at loan amount next. 
 
@@ -269,7 +289,11 @@ Xtest
 ```
 
 From this chi-square test, it seems that loan term amount is not important. 
-In conclusion, it seems as though the following variables are important: Married, Credit History, Education, and Property Area. We saw earlier that education and property area are not missing any values, however married and credit history are. To be exact there are:
+In conclusion, it seems as though the following variables are important: Married, Credit History, Education, and Property Area. 
+
+## Imputing Missing Values
+
+We saw earlier that education and property area are not missing any values, however married and credit history are. To be exact there are:
 
 ```{r}
 sum(is.na(train$Married))
@@ -378,12 +402,6 @@ sum(is.na(train$Credit_History2))
 sum(is.na(train$Credit_History3))
 ```
 
-Now that we've taken care of the missing values of the variables we care about, we can write this to a new datafile and go on to making the machine learning models in Python.
-
-```{r}
-write.csv(train, file = "preProcessedTrain.csv")
-```
-
 Finally, we just need to "preprocess" the test data in the same way.
 
 ```{r}
@@ -402,8 +420,84 @@ test <- test %>%
 test <- test %>%
   mutate(Credit_History3 = if_else(is.na(Credit_History2) & test$Education == "Not Graduate", "0", Credit_History2))
 sum(is.na(test$Credit_History3))
+
+test <- test %>%
+    mutate(Dependents = if_else(Dependents == '3+', '3', Dependents))
+test$Dependents <- as.numeric(test$Dependents)
+test$TotalIncome <- test$ApplicantIncome + test$CoapplicantIncome
 ```
 
+## Following Online Course - Exploratory Analysis
+
+The above analysis was done entirely on my own. The next part of the analysis has been performed following the "course" by Analytics Vidhya on this dataset. 
+
+The course, like me, thought that applicant income would be an important variable in predicting whether or not a loan gets approved. They decided to combine applicant and coapplicant income, as this might be a better reflection of the applicant's actual available income and looked at if there was a relation in this way. 
+
 ```{r}
-write.csv(test, file = "preProcessedTest.csv")
+library(OneR)
+train$TotalIncome <- train$ApplicantIncome + train$CoapplicantIncome
+train$binnedIncome <- cut(train$TotalIncome, breaks = c(0,2500,4000,6000,81000), labels = c("Low", "Avg.", "High", "V. High"))
+
+train_temp <- train[(which(!is.na(train$binnedIncome))),]
+included_vars <- c("binnedIncome", "Loan_Status")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Loan_Status ~ binnedIncome, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+Now we see that people with low total income are much less likely than others to have their loans approved. Next the course bins loan amounts and explores whether this has an effect on loan approval.
+
+```{r}
+train$binnedLoanAmount <- cut(train$LoanAmount, breaks = c(0,100,200,700), labels = c("Low", "Avg.", "High"))
+
+train_temp <- train[(which(!is.na(train$binnedLoanAmount))),]
+included_vars <- c("binnedLoanAmount", "Loan_Status")
+train_temp <- train_temp %>% select(included_vars)
+mosaic(Loan_Status ~ binnedLoanAmount, train_temp, gp = gpar(fill = c("#FF6633", "#3399FF")))
+```
+
+From this we see that people asking for higher loan amounts are slightly less likely to get their loans approved. We'll get rid of these binned categories for now since we used them only to perform exploratory analysis.
+
+```{r}
+train$binnedIncome <- NULL
+train$binnedLoanAmount <- NULL
+```
+
+The last thing done in the exploratory part of the course is changing the '3+' in the number of dependents variable to '3' so that this variable is now numerical and similarly changing the loan approval status to 0 for No and 1 for Yes. I'm going to read in the data once again to be consistent with what the course does, as next I will look at how the course imputes the missing values. 
+
+```{r}
+train <- train %>%
+    mutate(Dependents = if_else(Dependents == '3+', '3', Dependents))
+train$Dependents <- as.numeric(train$Dependents)
+
+train$Loan_Status <- ifelse(train$Loan_Status=="Y", 1, 0)
+```
+
+Finally, we look at a correlation matrix of the continuous variables and the loan status.
+
+```{r}
+library(GGally)
+train$Credit_History3 <- as.numeric(train$Credit_History3)
+cont_vars <- c("Dependents", "ApplicantIncome", "CoapplicantIncome", "TotalIncome", "LoanAmount", "Credit_History3", "Loan_Status")
+train_temp <- train %>% select(cont_vars)
+ggcorr(train_temp, palette = "RdBu", label = TRUE, label_size = 2.5, size = 3, legend.position = "bottom", hjust = 1)
+```
+
+This visualization confirms what we already discovered. Credit history has the highest correlation (amongst numerical variables) with loan status. Applicant income and loan amount are highly correlated. Total income and applicant income are very highly correlated but this is not insightful as applicant income is used directly to calculate total income (and makes up a higher proportion of total income than coapplicant income does, hence the lower correlation between coapplicant and total incomes).
+
+## Following Online Course - Missing Value and Outlier Treatment
+
+Let's see how many missing values we still have after some of the imputation we already did.
+
+```{r}
+colSums(is.na(train)) %>% sort(decreasing = TRUE)
+```
+
+We still have some missing values for columns that we found weren't very predictive for loan status. We can fill these in similar ways to the course, because why not really. For the categorical variables, the mode is used to fill in the NA values. I will save this part to do in Python because frankly it's just easier. 
+
+There are outliers in the loan amount which the course takes care of by performing a log transformation which I will also perform in Python since I have not yet filled in the missing values. Now that the analysis and preprocessing is done (at least in R), I can write the preprocessed dataframes to a file so that they're ready to be worked on in Python. 
+ 
+```{r}
+setwd("~/DataScienceProjects/Kaggle/Kaggle/LoanPrediction/Data")
+write.csv(train, file = "Data/preProcessedTrain.csv")
+write.csv(test, file = "Data/preProcessedTest.csv")
 ```

@@ -4,3 +4,4 @@ Data/*
 !Data/test.csv
 Loan-EDA.html
 Loan-EDA.pdf
+.Rhistory
