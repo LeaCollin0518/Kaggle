@@ -498,6 +498,6 @@ There are outliers in the loan amount which the course takes care of by performi
  
 ```{r}
 setwd("~/DataScienceProjects/Kaggle/Kaggle/LoanPrediction/Data")
-write.csv(train, file = "Data/preProcessedTrain.csv")
-write.csv(test, file = "Data/preProcessedTest.csv")
+write.csv(train, file = "preProcessedTrain.csv")
+write.csv(test, file = "preProcessedTest.csv")
 ```
