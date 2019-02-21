@@ -400,6 +400,9 @@ train <- train %>%
   mutate(Credit_History3 = if_else(is.na(Credit_History2) & train$Education == "Not Graduate", "0", Credit_History2))
 sum(is.na(train$Credit_History2))
 sum(is.na(train$Credit_History3))
+train$Credit_History <- train$Credit_History3
+train$Credit_History2 <- NULL
+train$Credit_History3 <- NULL
 ```
 
 Finally, we just need to "preprocess" the test data in the same way.
@@ -425,6 +428,9 @@ test <- test %>%
     mutate(Dependents = if_else(Dependents == '3+', '3', Dependents))
 test$Dependents <- as.numeric(test$Dependents)
 test$TotalIncome <- test$ApplicantIncome + test$CoapplicantIncome
+test$Credit_History <- test$Credit_History3
+test$Credit_History2 <- NULL
+test$Credit_History3 <- NULL
 ```
 
 ## Following Online Course - Exploratory Analysis
@@ -476,8 +482,8 @@ Finally, we look at a correlation matrix of the continuous variables and the loa
 
 ```{r}
 library(GGally)
-train$Credit_History3 <- as.numeric(train$Credit_History3)
-cont_vars <- c("Dependents", "ApplicantIncome", "CoapplicantIncome", "TotalIncome", "LoanAmount", "Credit_History3", "Loan_Status")
+train$Credit_History <- as.numeric(train$Credit_History)
+cont_vars <- c("Dependents", "ApplicantIncome", "CoapplicantIncome", "TotalIncome", "LoanAmount", "Credit_History", "Loan_Status")
 train_temp <- train %>% select(cont_vars)
 ggcorr(train_temp, palette = "RdBu", label = TRUE, label_size = 2.5, size = 3, legend.position = "bottom", hjust = 1)
 ```
